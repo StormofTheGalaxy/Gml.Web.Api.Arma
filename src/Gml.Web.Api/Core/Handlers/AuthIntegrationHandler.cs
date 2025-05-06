@@ -2,6 +2,7 @@ using System.Net;
 using AutoMapper;
 using FluentValidation;
 using Gml.Core.User;
+using Gml.Web.Api.Core.Extensions;
 using Gml.Web.Api.Core.Integrations.Auth;
 using Gml.Web.Api.Domains.Integrations;
 using Gml.Web.Api.Dto.Integration;
@@ -51,12 +52,13 @@ public class AuthIntegrationHandler : IAuthIntegrationHandler
 
             if (authResult.IsSuccess)
             {
+
                 var player = await gmlManager.Users.GetAuthData(
                     authResult.Login ?? authDto.Login,
                     authDto.Password,
                     userAgent,
                     context.Request.Protocol,
-                    context.Connection.RemoteIpAddress,
+                    context.ParseRemoteAddress(),
                     authResult.Uuid,
                     context.Request.Headers["X-HWID"]);
 
@@ -130,11 +132,12 @@ public class AuthIntegrationHandler : IAuthIntegrationHandler
                         HttpStatusCode.BadRequest));
                 }
 
-                player.TextureSkinUrl ??= (await gmlManager.Integrations.GetSkinServiceAsync())
-                    .Replace("{userName}", player.Name)
-                    .Replace("{userUuid}", player.Uuid);
+                if (string.IsNullOrEmpty(player.TextureSkinUrl))
+                    player.TextureSkinUrl = (await gmlManager.Integrations.GetSkinServiceAsync())
+                        .Replace("{userName}", player.Name)
+                        .Replace("{userUuid}", player.Uuid);
 
-                _ = gmlManager.Profiles.CreateUserSessionAsync(null, player);
+                await gmlManager.Profiles.CreateUserSessionAsync(null, player);
 
                 return Results.Ok(ResponseMessage.Create(
                     mapper.Map<PlayerReadDto>(player),
